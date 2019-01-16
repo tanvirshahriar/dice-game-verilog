@@ -1,0 +1,159 @@
+/*
+The game consists of 2 random number generators that generates random value to select one of 6 ROMs,
+each rom contains a data thaat draws the Dice face from 1 to 6, the random number generators values are read
+when KEY1 or KEY2 are pressed, these values 
+
+*/
+module DiceGame(
+
+	//////////// CLOCK //////////
+	input 		          		CLOCK_50,
+
+	//////////// SEG7 //////////
+	output		     [6:0]		HEX0,
+	output		     [6:0]		HEX1,
+	output		     [6:0]		HEX2,
+	output		     [6:0]		HEX3,
+	output		     [6:0]		HEX4,
+	output		     [6:0]		HEX5,
+
+	//////////// KEY //////////
+	input 		     [3:0]		KEY,
+
+	//////////// VGA //////////
+	output		          		VGA_BLANK_N,
+	output		     [7:0]		VGA_B,
+	output		          		VGA_CLK,
+	output		     [7:0]		VGA_G,
+	output		          		VGA_HS,
+	output		     [7:0]		VGA_R,
+	output		          		VGA_SYNC_N,
+	output		          		VGA_VS
+);
+
+
+
+//=======================================================
+//  REG/WIRE declarations
+//=======================================================
+	wire [2:0]player1;
+	wire [2:0]player2;
+	wire clk_65Mhz;
+	wire [2:0] score1;
+	wire [2:0] score2;
+	reg trig1, trig2;
+	reg[7:0]cnt1, cnt2; 
+	wire[11:0] BCD1, BCD2;
+	wire End_Of_Game;
+	wire [8:0] x;
+	wire [7:0] y;
+	wire [2:0] color;
+	wire plot;
+	
+	// sample Key1 and Key2 to create 2 syncronized triggers from it
+	always@(posedge CLOCK_50)
+		begin
+			trig1 <= KEY[1];
+			trig2 <= KEY[2];
+		end
+	// count the score of player 1 to be displayed on seven segment
+	always@(posedge trig1 or negedge KEY[0])
+		if(!KEY[0])
+			cnt1 <= 0; // reset
+		else if(!End_Of_Game) // add the score if the game is not finished
+			cnt1 <= cnt1 + score1;
+	// count the score of player 2 to be displayed on seven segment
+	always@(posedge trig2 or negedge KEY[0])
+		if(!KEY[0])
+			cnt2 <= 0; // reset
+		else if(!End_Of_Game) // add the score if the game is not finished
+			cnt2 <= cnt2 + score2;			
+// convert the binary values of score1 and score2 to BCD values suitable to be displayed on seven segment
+Bin2BCD Bin2BCD1(.binary(cnt1), 
+						.Digit0(BCD1[3:0]),
+						.Digit1(BCD1[7:4]),
+						.Digit2(BCD1[11:8])
+        );
+Bin2BCD Bin2BCD2(.binary(cnt2),
+						.Digit0(BCD2[3:0]),
+						.Digit1(BCD2[7:4]),
+						.Digit2(BCD2[11:8])
+        );
+// display the BCD numbers of score1 and score2 on seven segment displays
+
+// seven segment 1
+SSD_Driver SSD_Driver0(
+    .data(BCD1[3:0]),
+    .HEX(HEX0)
+    );
+// seven segment 2
+SSD_Driver SSD_Driver1(
+    .data(BCD1[7:4]),
+    .HEX(HEX1)
+    );
+// seven segment 3
+SSD_Driver SSD_Driver2(
+    .data(BCD1[11:8]),
+    .HEX(HEX2)
+    );
+// seven segment 4
+SSD_Driver SSD_Driver3(
+    .data(BCD2[3:0]),
+    .HEX(HEX3)
+    );
+// seven segment 5
+SSD_Driver SSD_Driver4(
+    .data(BCD2[7:4]),
+    .HEX(HEX4)
+    );
+// seven segment 6
+SSD_Driver SSD_Driver5(
+    .data(BCD2[11:8]),
+    .HEX(HEX5)
+    );
+// random number generator for player1
+Random_generator Random_generator1
+(
+	.clk(CLOCK_50), 
+	.enable((KEY[1] | End_Of_Game)), // the enable is Key1 and end of game flag
+	.rand_num(player1)
+);
+// random number generator for player2
+Random_generator Random_generator2
+(
+	.clk(CLOCK_50), 
+	.enable((KEY[2] | End_Of_Game)),  // the enable is Key1 and end of game flag
+	.rand_num(player2)
+);
+// PLL to create 65 MHz clock from 50 MHZ because the VGA needs 65 MHZ
+Clock_Gen_0002 clock_gen_inst (
+	.refclk   (CLOCK_50),   //  refclk.clk
+	.rst      (1'b0),      //   reset.reset
+	.outclk_0 (clk_65Mhz)
+);
+
+vga_timing vga_timing
+
+(
+	.start(KEY[3]),
+	.reset(KEY[0]),
+	.clk(clk_65Mhz), 
+	.player1(player1),
+	.player2(player2),
+	.End_Of_Game(End_Of_Game),
+	.trig1(trig1),
+	.trig2(trig2),
+	.score1(score1),
+	.score2(score2),
+	//////////// VGA //////////
+	.VGA_BLANK_N(VGA_BLANK_N),
+	.VGA_B(VGA_B),
+	.VGA_CLK(VGA_CLK),
+	.VGA_G(VGA_G),
+	.VGA_HS(VGA_HS),
+	.VGA_R(VGA_R),
+	.VGA_SYNC_N(VGA_SYNC_N),
+	.VGA_VS(VGA_VS)
+);
+
+endmodule
